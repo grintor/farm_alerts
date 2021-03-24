@@ -82,7 +82,7 @@ def lambda_handler(event, context):
                                   'Cache-Control': 'no-store, must-revalidate'
                                 }
 
-        if os.environ['log_events'] == 'true':
+        if os.environ['log_events'] == 'all':
             table.update_item(
                 Key={ 'guid': 'event_log_' + context.aws_request_id },
                 UpdateExpression = 'set invocation_result = :result',
@@ -107,7 +107,7 @@ def lambda_handler(event, context):
         traceback_text = ''
             
             
-        if os.environ['log_events'] == 'true':
+        if os.environ['log_events'] == 'all':
             table.put_item(Item = {
                 'guid': 'event_log_' + context.aws_request_id,
                 'moment': str(datetime.datetime.utcnow()),
@@ -288,7 +288,7 @@ def lambda_handler(event, context):
 
         full_log = aux_log_stream.getvalue() + "\r\n" + traceback_text
         if len(full_log) > 150000: full_log = f"[tuncated]\r\n{full_log[-149900:]}"
-        if os.environ['log_events'] in ['true', 'errors']:
+        if os.environ['log_events'] in ['all', 'errors']:
             table.put_item(Item = {
                 'code': 550,
                 'meta': 'error_log',
@@ -302,7 +302,7 @@ def lambda_handler(event, context):
                 'event': json.loads(json.dumps(event, default=json_default), parse_float=decimal.Decimal), # passing through json because dynamo will crash on floats
             })
 
-        if os.environ['log_events'] == 'true':
+        if os.environ['log_events'] == 'all':
             table.update_item(
                 Key={ 'guid': 'event_log_' + context.aws_request_id },
                 UpdateExpression = 'set uncaught_exception = :e',
@@ -319,7 +319,7 @@ def lambda_handler(event, context):
             full_log += '\r\n' + traceback_text
             real_print(traceback_text)
         if len(full_log) > 150000: full_log = f"[tuncated]\r\n{full_log[-149900:]}"
-        if os.environ['log_events'] == 'true':
+        if os.environ['log_events'] == 'all':
 
             table.update_item(
                 Key={ 'guid': 'event_log_' + context.aws_request_id, },
