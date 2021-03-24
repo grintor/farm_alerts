@@ -229,10 +229,10 @@ def lambda_handler(event, context):
                         log.i(f"not sending pesticide_alert because an alert has already been sent since the last rain")
                     else:
                         log.i(f"no pesticide_alert has been sent since last rain")
-                        if days_until_precipitation <= 4:
-                            log.i(f"not sending pesticide_alert because it will rain within 4 days")
+                        if days_until_precipitation <= 3:
+                            log.i(f"not sending pesticide_alert because it will rain within 3 days")
                         else:
-                            log.i(f"precipitation is not forecasted for the next 7 days")
+                            log.i(f"precipitation is not forecasted for the next 3 days")
                             if forecasted_low < 40:
                                 log.i(f"not sending pesticide_alert because it is too cold for high insect activity")
                             else:
