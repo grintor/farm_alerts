@@ -195,13 +195,20 @@ def lambda_handler(event, context):
                 precipitation_forecasted = False
                 forecasted_low = 1000
                 forecasted_high = -1000
+                days_until_precipitation = 1000
+                loop_pass = 0
                 for day in forcast['daily']:
                     if day['temp']['min'] < forecasted_low: forecasted_low = day['temp']['min']
                     if day['temp']['max'] > forecasted_high: forecasted_high = day['temp']['max']
                     for weather in day['weather']:
                         if weather['id'] <= 701:
-                            precipitation_forecasted = time.strftime('%Y-%m-%d', time.gmtime(hour['dt']))
+                            if not precipitation_forecasted: precipitation_forecasted = time.strftime('%Y-%m-%d %H:%M', time.gmtime(hour['dt']))
+                            if days_until_precipitation == 1000: days_until_precipitation = loop_pass
+                    loop_pass += 1
 
+                log.i(f"{days_until_precipitation} days until precipitation. ({precipitation_forecasted})")
+                log.i(f"{forecasted_low} forecasted_low")
+                log.i(f"{forecasted_high} forecasted_high")
 
                 if not 'Item' in table.get_item(Key = {'guid': f"weather_log-{farm_name}-{yesterday_date}"}):
                     table.put_item(
@@ -222,8 +229,8 @@ def lambda_handler(event, context):
                         log.i(f"not sending pesticide_alert because an alert has already been sent since the last rain")
                     else:
                         log.i(f"no pesticide_alert has been sent since last rain")
-                        if precipitation_forecasted:
-                            log.i(f"not sending pesticide_alert because it will rain within 7 days")
+                        if days_until_precipitation <= 4:
+                            log.i(f"not sending pesticide_alert because it will rain within 4 days")
                         else:
                             log.i(f"precipitation is not forecasted for the next 7 days")
                             if forecasted_low < 40:
@@ -234,7 +241,7 @@ def lambda_handler(event, context):
                                 requests.post (
                                     f"https://api.twilio.com/2010-04-01/Accounts/{os.environ['twilio_sid']}/Messages.json",
                                     data={
-                                        'Body': f"Time to apply pesticide at {farm_conf['farm_name']}",
+                                        'Body': f"Time to apply pesticide at {farm_conf['farm_name']}!",
                                         'From': os.environ['twilio_num'],
                                         'To': farm_conf['alert_number']
                                     },
