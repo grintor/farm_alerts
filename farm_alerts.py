@@ -122,7 +122,7 @@ def lambda_handler(event, context):
         with redirect_stdout(aux_log_stream), redirect_stderr(aux_log_stream):
 
             ################################## < Not Boiler Plate > ##########################
-            
+
             all_farms = table.query(
                 IndexName='meta-guid-index',
                 KeyConditionExpression = Key('meta').eq('farm_meta') & Key('guid').begins_with(f"farm_meta")
@@ -176,7 +176,8 @@ def lambda_handler(event, context):
                 ).json()
 
                 last_precipitation = farm_conf['last_precipitation']
-
+                last_pesticide_alert = farm_conf['last_pesticide_alert']
+                
                 precipitation_yesterday = False
                 for hour in yesterday_weather['hourly']:
                     for weather in hour['weather']:
@@ -192,8 +193,12 @@ def lambda_handler(event, context):
                             precipitation_today = True
 
                 precipitation_forecasted = False
-                for hour in forcast['daily']:
-                    for weather in hour['weather']:
+                forecasted_low = 1000
+                forecasted_high = -1000
+                for day in forcast['daily']:
+                    if day['temp']['min'] < forecasted_low: forecasted_low = day['temp']['min']
+                    if day['temp']['max'] > forecasted_high: forecasted_high = day['temp']['max']
+                    for weather in day['weather']:
                         if weather['id'] <= 701:
                             precipitation_forecasted = time.strftime('%Y-%m-%d', time.gmtime(hour['dt']))
 
@@ -209,18 +214,33 @@ def lambda_handler(event, context):
                         }
                     )
 
-                if farm_conf['pesticide_alerts']:
-                    if last_precipitation > farm_conf['last_pesticide_alert']:
-                        if not precipitation_forecasted:
-                            requests.post (
-                                f"https://api.twilio.com/2010-04-01/Accounts/{os.environ['twilio_sid']}/Messages.json",
-                                data={
-                                    'Body': f"Time to apply pesticide at {farm_conf['farm_name']}",
-                                    'From': os.environ['twilio_num'],
-                                    'To': farm_conf['alert_number']
-                                },
-                                auth = (os.environ['twilio_sid'], os.environ['twilio_auth'])
-                            )
+                if not farm_conf['pesticide_alerts']:
+                    log.i(f"not sending pesticide_alert because disabled")
+                else:
+                    log.i(f"pesticide_alert is enabled")
+                    if last_precipitation < farm_conf['last_pesticide_alert']:
+                        log.i(f"not sending pesticide_alert because an alert has already been sent since the last rain")
+                    else:
+                        log.i(f"no pesticide_alert has been sent since last rain")
+                        if precipitation_forecasted:
+                            log.i(f"not sending pesticide_alert because it will rain within 7 days")
+                        else:
+                            log.i(f"precipitation is not forecasted for the next 7 days")
+                            if forecasted_low < 40:
+                                log.i(f"not sending pesticide_alert because it is too cold for high insect activity")
+                            else:
+                                log.i(f"warm enough for high insect activity")
+                                last_pesticide_alert = today_datetime
+                                requests.post (
+                                    f"https://api.twilio.com/2010-04-01/Accounts/{os.environ['twilio_sid']}/Messages.json",
+                                    data={
+                                        'Body': f"Time to apply pesticide at {farm_conf['farm_name']}",
+                                        'From': os.environ['twilio_num'],
+                                        'To': farm_conf['alert_number']
+                                    },
+                                    auth = (os.environ['twilio_sid'], os.environ['twilio_auth'])
+                                )
+                    
 
                 table.update_item (
                     Key={ 'guid': farm_conf['guid'] },
@@ -230,7 +250,7 @@ def lambda_handler(event, context):
                         ', last_update = :last_update'
                     ),
                     ExpressionAttributeValues = {
-                        ':last_pesticide_alert': today_datetime,
+                        ':last_pesticide_alert': last_pesticide_alert,
                         ':last_precipitation': last_precipitation,
                         ':last_update': today_datetime,
                     }
